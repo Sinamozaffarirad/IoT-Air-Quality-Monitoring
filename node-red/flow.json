@@ -1,0 +1,618 @@
+[
+    {
+        "id": "96e52e794cd4e106",
+        "type": "tab",
+        "label": "IOT_FINAL _PROJECT_40021160214",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "01cfd373c85ab965",
+        "type": "mqtt in",
+        "z": "96e52e794cd4e106",
+        "name": "MQTT Subscriber",
+        "topic": "ESP8266/airquality/data",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "977f2ff52f3d9d2a",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 360,
+        "y": 500,
+        "wires": [
+            [
+                "4f8b46535df021c8",
+                "8050d67b89e9ee22",
+                "13e52ac88538adb8",
+                "e2d722323408ba06"
+            ]
+        ]
+    },
+    {
+        "id": "e2d722323408ba06",
+        "type": "function",
+        "z": "96e52e794cd4e106",
+        "name": "Email Condition Check",
+        "func": "var data = msg.payload;\nvar emailData = [];\n\n// Check AQI condition\nif (data.aqi_ens >= 4) {\n    emailData.push({\n        type: 'aqi',\n        subject: '🚨 Air Quality Alert - Poor AQI Detected',\n        body: `ALERT: Poor Air Quality Detected!\\n\\n` +\n              `Current AQI Level: ${data.aqi_ens}\\n` +\n              `Status: Unhealthy (≥4)\\n` +\n              `Temperature: ${data.temperature}°C\\n` +\n              `Humidity: ${data.humidity}%\\n` +\n              `Pressure: ${data.pressure} hPa\\n\\n` +\n              `Recommendation: Consider staying indoors and using air purifiers.\\n` +\n              `Time: ${new Date().toLocaleString()}`,\n        data: data\n    });\n}\n\n// Check CO2 condition\nif (data.eco2_ens >= 1000) {\n    emailData.push({\n        type: 'co2',\n        subject: '⚠️ High CO2 Levels Alert',\n        body: `WARNING: High CO2 Levels Detected!\\n\\n` +\n              `Current CO2 Level: ${data.eco2_ens} ppm\\n` +\n              `Status: High (≥1000 ppm)\\n` +\n              `TVOC: ${data.tvoc_ens}\\n` +\n              `Temperature: ${data.temperature}°C\\n` +\n              `Humidity: ${data.humidity}%\\n\\n` +\n              `Recommendation: Increase ventilation immediately. Open windows or turn on fans.\\n` +\n              `Time: ${new Date().toLocaleString()}`,\n        data: data\n    });\n}\n\n// Check Smoke/Gas condition (MQ135)\nif (data.mq135_value >= 990) {\n    emailData.push({\n        type: 'smoke',\n        subject: '🔥 Smoke/Gas Detection Alert - URGENT',\n        body: `URGENT: Smoke or Hazardous Gas Detected!\\n\\n` +\n              `MQ135 Sensor Value: ${data.mq135_value}\\n` +\n              `Status: Critical (≥990)\\n` +\n              `AQI: ${data.aqi_ens}\\n` +\n              `CO2: ${data.eco2_ens} ppm\\n` +\n              `Temperature: ${data.temperature}°C\\n\\n` +\n              `IMMEDIATE ACTION REQUIRED:\\n` +\n              `- Check for smoke or fire\\n` +\n              `- Ensure proper ventilation\\n` +\n              `- Consider evacuating if necessary\\n\\n` +\n              `Time: ${new Date().toLocaleString()}`,\n        data: data\n    });\n}\n\n// Send each email as separate message\nif (emailData.length > 0) {\n    var messages = [];\n    for (var i = 0; i < emailData.length; i++) {\n        messages.push({\n            payload: emailData[i].data,\n            topic: emailData[i].subject,\n            email_body: emailData[i].body,\n            alert_type: emailData[i].type\n        });\n    }\n    return [messages];\n}\n\nreturn null;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 650,
+        "y": 740,
+        "wires": [
+            [
+                "5ecc57327aa95001"
+            ]
+        ]
+    },
+    {
+        "id": "5ecc57327aa95001",
+        "type": "function",
+        "z": "96e52e794cd4e106",
+        "name": "Email Rate Limiter",
+        "func": "// Rate limiting to prevent email spam\n// Store last email times in context\nvar lastEmails = context.get('lastEmails') || {};\nvar currentTime = Date.now();\nvar cooldownPeriod = 1 * 60 * 1000; // 1 minutes in milliseconds\n\nvar alertType = msg.alert_type;\n\n// Check if we've sent this type of alert recently\nif (lastEmails[alertType] && (currentTime - lastEmails[alertType] < cooldownPeriod)) {\n    // Skip this email - too soon since last one\n    node.warn(`Email rate limited for ${alertType} alert. Last sent ${Math.round((currentTime - lastEmails[alertType])/1000/60)} minutes ago.`);\n    return null;\n}\n\n// Update last email time for this alert type\nlastEmails[alertType] = currentTime;\ncontext.set('lastEmails', lastEmails);\n\n// Pass the message through\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 880,
+        "y": 740,
+        "wires": [
+            [
+                "414226f852716da7"
+            ]
+        ]
+    },
+    {
+        "id": "414226f852716da7",
+        "type": "function",
+        "z": "96e52e794cd4e106",
+        "name": "Prepare Email",
+        "func": "// Configure email settings\nmsg.to = \"your-email@example.com\";  // Replace with your email\nmsg.subject = msg.topic;  // Subject was set in the condition check\nmsg.payload = msg.email_body;  // Body was set in the condition check\n\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1110,
+        "y": 740,
+        "wires": [
+            [
+                "d02e5ed9ba64e209"
+            ]
+        ]
+    },
+    {
+        "id": "d02e5ed9ba64e209",
+        "type": "e-mail",
+        "z": "96e52e794cd4e106",
+        "server": "smtp.gmail.com",
+        "port": "465",
+        "authtype": "BASIC",
+        "saslformat": false,
+        "token": "",
+        "secure": true,
+        "tls": true,
+        "name": "your-email@example.com",
+        "dname": "Air Quality Monitor",
+        "x": 1330,
+        "y": 740,
+        "wires": []
+    },
+    {
+        "id": "4f8b46535df021c8",
+        "type": "function",
+        "z": "96e52e794cd4e106",
+        "name": "Process Data & Check Alert",
+        "func": "var data = msg.payload;\n\n// Set the 'led' variable to 1 if aqi_ens is 4 or higher, otherwise 0.\nvar led = (data.aqi_ens >= 4) ? 1 : 0;\nvar led2 = (data.eco2_ens >= 1000) ? 1 : 0;\nvar led3 = (data.mq135_value >= 990) ? 1 : 0;\n\nmsg.payload = data;\nmsg.alert = (data.aqi_ens >= 4);\n\nif (msg.alert) {\n  node.warn('ALERT: Poor Air Quality - AQI: ' + data.aqi_ens);\n}\n\n// Prepare HTTP URLs (replace YOUR_AUTH_TOKEN)\nvar auth = 'YOUR_BLYNK_AUTH_TOKEN';\n\n// Individual URLs for dashboard updates\nmsg.tempUrl = `https://blynk.cloud/external/api/update?token=${auth}&V1=${data.temperature.toFixed(1)}`;\nmsg.humUrl = `https://blynk.cloud/external/api/update?token=${auth}&V2=${data.humidity.toFixed(1)}`;\nmsg.pressUrl = `https://blynk.cloud/external/api/update?token=${auth}&V3=${data.pressure}`;\nmsg.ppmUrl = `https://blynk.cloud/external/api/update?token=${auth}&V4=${data.eco2_ens}`;\nmsg.aqiUrl = `https://blynk.cloud/external/api/update?token=${auth}&V5=${data.aqi_ens}`;\nmsg.tvocUrl = `https://blynk.cloud/external/api/update?token=${auth}&V6=${data.tvoc_ens}`;\nmsg.mq135Url = `https://blynk.cloud/external/api/update?token=${auth}&V7=${data.mq135_value}`;\n// The ledUrl now correctly uses the integer 'led' variable\nmsg.ledUrl = `https://blynk.cloud/external/api/update?token=${auth}&V8=${led}`;\nmsg.led2Url = `https://blynk.cloud/external/api/update?token=${auth}&V9=${led2}`;\nmsg.led3Url = `https://blynk.cloud/external/api/update?token=${auth}&V10=${led3}`;\n\n// For notification: Log event\nif (msg.alert) {\n  msg.eventUrl = `https://blynk.cloud/external/api/logEvent?token=${auth}&code=air_quality_alert&description=Poor Air Quality Detected! AQI: ${data.aqi_ens}`;\n}\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 840,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "777817ebf505bfa8",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update Temp (V1)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{tempUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1350,
+        "y": 40,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "3a4295af3f7dbf0f",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update Humidity (V2)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{humUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1360,
+        "y": 80,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "561bc0e1859cf1bb",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update Pressure (V3)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{pressUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1360,
+        "y": 120,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "524c18a82edafd15",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update ECO2 (V4)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{ppmUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1350,
+        "y": 160,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "109392cac641239c",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Send Notification",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{eventUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1350,
+        "y": 460,
+        "wires": [
+            [
+                "49754bffac81d385"
+            ]
+        ]
+    },
+    {
+        "id": "061ff14142b4711a",
+        "type": "debug",
+        "z": "96e52e794cd4e106",
+        "name": "Update Response",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1610,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "49754bffac81d385",
+        "type": "debug",
+        "z": "96e52e794cd4e106",
+        "name": "Event Response",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1620,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "13e52ac88538adb8",
+        "type": "function",
+        "z": "96e52e794cd4e106",
+        "name": "Prepare INSERT Query",
+        "func": "var data = msg.payload;\n\nmsg.topic = `\n  INSERT INTO sensor_data (\n    temperature,\n    humidity,\n    pressure,\n    mq135_value,\n    iaq,\n    static_iaq,\n    co2_equivalent,\n    breath_voc,\n    temp_aht,\n    hum_aht,\n    aqi_ens,\n    tvoc_ens,\n    eco2_ens\n  ) VALUES (\n    ${data.temperature},\n    ${data.humidity},\n    ${data.pressure},\n    ${data.mq135_value},\n    ${data.iaq},\n    ${data.static_iaq},\n    ${data.co2_equivalent},\n    ${data.breath_voc},\n    ${data.temp_aht},\n    ${data.hum_aht},\n    ${data.aqi_ens},\n    ${data.tvoc_ens},\n    ${data.eco2_ens}\n  );\n`;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 500,
+        "wires": [
+            [
+                "b3213216bbf42e8e"
+            ]
+        ]
+    },
+    {
+        "id": "b3213216bbf42e8e",
+        "type": "sqlite",
+        "z": "96e52e794cd4e106",
+        "mydb": "8de4854f7c043acf",
+        "sqlquery": "msg.topic",
+        "sql": "",
+        "name": "Insert Sensor Data",
+        "x": 1190,
+        "y": 500,
+        "wires": [
+            [
+                "05c89082281b0f5f"
+            ]
+        ]
+    },
+    {
+        "id": "05c89082281b0f5f",
+        "type": "debug",
+        "z": "96e52e794cd4e106",
+        "name": "SQL Insert Response",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1440,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "7d69ab97af462aa1",
+        "type": "inject",
+        "z": "96e52e794cd4e106",
+        "name": "Create Table (Once)",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "CREATE TABLE IF NOT EXISTS sensor_data ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME DEFAULT (datetime('now','localtime')), temperature REAL, humidity REAL, pressure REAL, mq135_value REAL, iaq REAL, static_iaq REAL, co2_equivalent REAL, breath_voc REAL, temp_aht REAL, hum_aht REAL, aqi_ens INTEGER, tvoc_ens INTEGER, eco2_ens INTEGER );",
+        "x": 920,
+        "y": 660,
+        "wires": [
+            [
+                "b3213216bbf42e8e"
+            ]
+        ]
+    },
+    {
+        "id": "199796e94026e938",
+        "type": "inject",
+        "z": "96e52e794cd4e106",
+        "name": "Query Data Example",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 10",
+        "x": 910,
+        "y": 600,
+        "wires": [
+            [
+                "b3213216bbf42e8e"
+            ]
+        ]
+    },
+    {
+        "id": "0927f20c65f14adc",
+        "type": "switch",
+        "z": "96e52e794cd4e106",
+        "name": "Route Based on Alert",
+        "property": "alert",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "false",
+        "repair": false,
+        "outputs": 2,
+        "x": 1100,
+        "y": 220,
+        "wires": [
+            [
+                "109392cac641239c",
+                "777817ebf505bfa8",
+                "3a4295af3f7dbf0f",
+                "561bc0e1859cf1bb",
+                "524c18a82edafd15",
+                "e5f78b95abd60ab8",
+                "28cf1878cb6db882",
+                "bfa4fac02587d5e3",
+                "cd2527f5069d82a4",
+                "8cf3afbb8c76ead7",
+                "0056edcc772beed1"
+            ],
+            [
+                "777817ebf505bfa8",
+                "3a4295af3f7dbf0f",
+                "561bc0e1859cf1bb",
+                "524c18a82edafd15",
+                "e5f78b95abd60ab8",
+                "28cf1878cb6db882",
+                "bfa4fac02587d5e3",
+                "cd2527f5069d82a4",
+                "8cf3afbb8c76ead7",
+                "0056edcc772beed1"
+            ]
+        ]
+    },
+    {
+        "id": "8050d67b89e9ee22",
+        "type": "debug",
+        "z": "96e52e794cd4e106",
+        "name": "debug MQTT Subscriber",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 650,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "e5f78b95abd60ab8",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update AQI (V5)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{aqiUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1340,
+        "y": 200,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "28cf1878cb6db882",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update TVOC (V6)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{tvocUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1350,
+        "y": 240,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "bfa4fac02587d5e3",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update MQ-135(V7)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{mq135Url}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1360,
+        "y": 280,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "cd2527f5069d82a4",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update Aqi Alert(V8)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{ledUrl}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1360,
+        "y": 320,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "8cf3afbb8c76ead7",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update Co2 Alert(V9)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{led2Url}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1360,
+        "y": 360,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "0056edcc772beed1",
+        "type": "http request",
+        "z": "96e52e794cd4e106",
+        "name": "Update Smoke Alert(V10)",
+        "method": "GET",
+        "paytoqs": "ignore",
+        "url": "{{{led3Url}}}",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1370,
+        "y": 400,
+        "wires": [
+            [
+                "061ff14142b4711a"
+            ]
+        ]
+    },
+    {
+        "id": "977f2ff52f3d9d2a",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "broker.hivemq.com",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "8de4854f7c043acf",
+        "type": "sqlitedb",
+        "db": "C:\\Local Disk D\\UNI Files\\IOT\\Final Project\\Node-Red\\sensor_data.db",
+        "mode": "RWC"
+    }
+]
